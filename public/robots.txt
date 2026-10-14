@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+
+Sitemap: https://natanmartins.com.br/sitemap-index.xml
