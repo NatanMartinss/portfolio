@@ -1,0 +1,294 @@
+---
+import type { Lang } from '../i18n/ui';
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+
+const S = {
+  en: {
+    tps: 'Transactions / second', par: 'Flink parallelism', fraud: 'Fraud rate', thr: 'Decision threshold',
+    attack: 'Launch card-testing attack', attackOn: 'Attack in progress…',
+    throughput: 'Throughput', util: 'Flink utilisation', p50: 'Latency p50', p99: 'Latency p99',
+    precision: 'Precision', recall: 'Recall', fbr: 'Legit customers blocked',
+    sloOk: 'within 20 ms SLO', sloBad: 'breaching 20 ms SLO', backlog: 'backlog',
+    chart: 'Latency p99, last 60 s', slo: 'SLO 20 ms', ago: 's ago',
+    inspectHint: 'Click any dot in the pipeline to see why the model decided what it did.',
+    inspectTitle: 'Transaction', truth: 'Ground truth', fraudW: 'fraud', legitW: 'legitimate',
+    decision: 'Decision', blocked: 'blocked', approved: 'approved', scoreW: 'Fraud probability',
+    why: 'What pushed the score', amount: 'Amount', z: 'vs. card history', vel: 'Card velocity', velU: 'tx in 60 s',
+    dist: 'Distance from last tx', merch: 'Merchant risk', lat: 'Latency breakdown', queue: 'queue',
+    log: 'Recently blocked', reason: 'main reason', dotNote: 'Each dot is a sampled transaction; the metrics use the full simulated stream.',
+    drag: 'Drag to orbit · scroll to zoom',
+    lessons: [
+      'Push transactions past ~80% utilisation and watch p99 blow the SLO long before the system is “full”. Queueing is non-linear.',
+      'Raise parallelism to buy back latency: that is the architecture answer, not a faster model.',
+      'Lower the threshold: recall rises, but so does the count of legitimate customers you block. Pick it from the cost of each error.',
+      'Launch the attack: the first small charges get through, then the 60-second velocity window catches up.',
+    ],
+    try: 'Things to try',
+  },
+  pt: {
+    tps: 'Transações / segundo', par: 'Paralelismo do Flink', fraud: 'Taxa de fraude', thr: 'Limiar de decisão',
+    attack: 'Disparar ataque de card testing', attackOn: 'Ataque em andamento…',
+    throughput: 'Vazão', util: 'Utilização do Flink', p50: 'Latência p50', p99: 'Latência p99',
+    precision: 'Precisão', recall: 'Recall', fbr: 'Clientes legítimos bloqueados',
+    sloOk: 'dentro do SLO de 20 ms', sloBad: 'estourando o SLO de 20 ms', backlog: 'backlog',
+    chart: 'Latência p99, últimos 60 s', slo: 'SLO 20 ms', ago: 's atrás',
+    inspectHint: 'Clique em qualquer ponto do pipeline para ver por que o modelo decidiu o que decidiu.',
+    inspectTitle: 'Transação', truth: 'Verdade', fraudW: 'fraude', legitW: 'legítima',
+    decision: 'Decisão', blocked: 'bloqueada', approved: 'aprovada', scoreW: 'Probabilidade de fraude',
+    why: 'O que empurrou o score', amount: 'Valor', z: 'vs. histórico do cartão', vel: 'Velocidade do cartão', velU: 'tx em 60 s',
+    dist: 'Distância da última tx', merch: 'Risco do comerciante', lat: 'Composição da latência', queue: 'fila',
+    log: 'Bloqueadas recentemente', reason: 'motivo principal', dotNote: 'Cada ponto é uma transação amostrada; as métricas usam o fluxo simulado completo.',
+    drag: 'Arraste para girar · role para aproximar',
+    lessons: [
+      'Leve as transações além de ~80% de utilização e veja o p99 estourar o SLO muito antes do sistema estar “cheio”. Filas não são lineares.',
+      'Aumente o paralelismo para recuperar latência: essa é a resposta de arquitetura, não um modelo mais rápido.',
+      'Baixe o limiar: o recall sobe, mas também sobe o número de clientes legítimos bloqueados. Escolha pelo custo de cada erro.',
+      'Dispare o ataque: as primeiras cobranças pequenas passam, depois a janela de velocidade de 60 segundos alcança.',
+    ],
+    try: 'O que experimentar',
+  },
+}[lang];
+
+const names = lang === 'en'
+  ? { src: ['Card swipes', 'POS / API'], kafka: ['Redpanda', '3 partitions'], flink: ['Flink', 'windowed features'], redis: ['Redis', 'profiles'], model: ['Model', 'score'], ok: ['Approve', ''], block: ['Block', ''] }
+  : { src: ['Cartões', 'POS / API'], kafka: ['Redpanda', '3 partições'], flink: ['Flink', 'features em janela'], redis: ['Redis', 'perfis'], model: ['Modelo', 'score'], ok: ['Aprova', ''], block: ['Bloqueia', ''] };
+---
+<div class="demo" id="fraud-demo" data-s={JSON.stringify(S)} data-names={JSON.stringify(names)} data-lang={lang}>
+  <div class="controls">
+    <label>
+      <span class="mono">{S.tps} <output data-out="tps">3,000</output></span>
+      <input type="range" name="tps" min="500" max="14000" step="250" value="3000" />
+    </label>
+    <label>
+      <span class="mono">{S.par} <output data-out="parallelism">4</output></span>
+      <input type="range" name="parallelism" min="1" max="8" step="1" value="4" />
+    </label>
+    <label>
+      <span class="mono">{S.fraud} <output data-out="fraudRate">1.0%</output></span>
+      <input type="range" name="fraudRate" min="0.002" max="0.08" step="0.002" value="0.01" />
+    </label>
+    <label>
+      <span class="mono">{S.thr} <output data-out="threshold">0.50</output></span>
+      <input type="range" name="threshold" min="0.05" max="0.95" step="0.05" value="0.5" />
+    </label>
+    <button type="button" class="btn" data-attack>{S.attack}</button>
+  </div>
+
+  <div class="stage">
+    <div class="stage-canvas fraud-canvas" data-canvas></div>
+    <p class="mono stage-note">{S.drag} · {S.dotNote}</p>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><span class="mono">{S.throughput}</span><strong data-m="tps">–</strong><span class="mono" data-m="util">–</span></div>
+    <div class="tile"><span class="mono">{S.p50}</span><strong data-m="p50">–</strong></div>
+    <div class="tile"><span class="mono">{S.p99}</span><strong data-m="p99">–</strong><span class="mono slo" data-m="slo">–</span></div>
+    <div class="tile"><span class="mono">{S.precision}</span><strong data-m="precision">–</strong></div>
+    <div class="tile"><span class="mono">{S.recall}</span><strong data-m="recall">–</strong></div>
+    <div class="tile"><span class="mono">{S.fbr}</span><strong data-m="fbr">–</strong></div>
+  </div>
+
+  <div class="lower">
+    <figure class="chart">
+      <div data-chart></div>
+      <figcaption class="fig-caption">{S.chart}</figcaption>
+    </figure>
+    <aside class="inspect" data-inspect aria-live="polite">
+      <p class="mono">{S.inspectHint}</p>
+    </aside>
+    <div class="log">
+      <h3 class="mono caps">{S.log}</h3>
+      <ol data-log></ol>
+    </div>
+  </div>
+
+  <div class="try">
+    <h3>{S.try}</h3>
+    <ol>{S.lessons.map((l) => <li>{l}</li>)}</ol>
+  </div>
+</div>
+
+<script>
+  import { FraudSim, contributions, type Tx } from '../scenes/fraud-sim';
+  import { mountFraud } from '../scenes/fraud';
+  import { webglAvailable } from '../scenes/common';
+  import { createLineChart } from '../scenes/chart';
+
+  const root = document.getElementById('fraud-demo')!;
+  const S = JSON.parse(root.dataset.s!);
+  const names = JSON.parse(root.dataset.names!);
+  const locale = root.dataset.lang === 'pt' ? 'pt-BR' : 'en-US';
+  const nf = (n: number, d = 0) => n.toLocaleString(locale, { minimumFractionDigits: d, maximumFractionDigits: d });
+  const pct = (n: number, d = 1) => (Number.isFinite(n) ? `${nf(n * 100, d)}%` : '–');
+  const sim = new FraudSim();
+
+  // Controles → parâmetros da simulação.
+  const fmt: Record<string, (v: number) => string> = {
+    tps: (v) => nf(v),
+    parallelism: (v) => nf(v),
+    fraudRate: (v) => pct(v),
+    threshold: (v) => nf(v, 2),
+  };
+  root.querySelectorAll<HTMLInputElement>('input[type=range]').forEach((input) => {
+    const key = input.name as keyof typeof sim.params;
+    const out = root.querySelector(`[data-out="${key}"]`)!;
+    const apply = () => {
+      sim.params[key] = Number(input.value);
+      out.textContent = fmt[key](Number(input.value));
+    };
+    input.addEventListener('input', apply);
+    apply();
+  });
+  const attackBtn = root.querySelector<HTMLButtonElement>('[data-attack]')!;
+  attackBtn.addEventListener('click', () => {
+    sim.startAttack();
+    attackBtn.disabled = true;
+    attackBtn.textContent = S.attackOn;
+    setTimeout(() => {
+      attackBtn.disabled = false;
+      attackBtn.textContent = S.attack;
+    }, 8000);
+  });
+
+  // Indicadores.
+  const m = (k: string) => root.querySelector<HTMLElement>(`[data-m="${k}"]`)!;
+  const ms = (v: number) => (v > 1000 ? `${nf(v / 1000, 1)} s` : `${nf(v, 1)} ms`);
+
+  // Gráfico de p99: uma série, linha de referência do SLO, crosshair com tooltip.
+  const chart = createLineChart(root.querySelector<HTMLElement>('[data-chart]')!, {
+    label: S.chart,
+    capacity: 60,
+    minMax: 40,
+    step: 20,
+    format: ms,
+    axisFormat: (v) => (v >= 1000 ? `${nf(v / 1000)}s` : nf(v)),
+    tip: (n) => `${n}${S.ago}`,
+    reference: { value: 20, text: S.slo },
+  });
+
+  // Painel de inspeção.
+  const inspect = root.querySelector<HTMLElement>('[data-inspect]')!;
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  function showTx(tx: Tx | null) {
+    if (!tx) {
+      inspect.innerHTML = `<p class="mono">${esc(S.inspectHint)}</p>`;
+      return;
+    }
+    const c = contributions(tx);
+    const rows: [string, string, number][] = [
+      [S.amount, `$${nf(tx.amount, 2)} (z ${nf(tx.z, 1)} ${S.z})`, c.z],
+      [S.vel, `${tx.velocity} ${S.velU}`, c.velocity],
+      [S.dist, `${nf(tx.distanceKm)} km`, c.distance],
+      [S.merch, nf(tx.merchantRisk, 2), c.merchantRisk],
+    ];
+    const maxC = Math.max(...rows.map((r) => Math.abs(r[2])), 1);
+    const L = tx.latency;
+    inspect.innerHTML = `
+      <h3>${S.inspectTitle} #${tx.id}</h3>
+      <dl class="kv">
+        <dt>${S.scoreW}</dt><dd><strong>${nf(tx.score * 100, 1)}%</strong> vs ${nf(sim.params.threshold * 100)}%</dd>
+        <dt>${S.decision}</dt><dd class="${tx.blocked ? 'red' : ''}">${tx.blocked ? '■ ' + S.blocked : '○ ' + S.approved}</dd>
+        <dt>${S.truth}</dt><dd>${tx.isFraud ? S.fraudW : S.legitW}</dd>
+      </dl>
+      <p class="mono caps sub">${S.why}</p>
+      <ul class="contrib">${rows.map(([k, v, w]) => `
+        <li><span>${k}<em>${esc(v)}</em></span>
+        <span class="bar"><i style="width:${(Math.abs(w) / maxC) * 100}%" class="${w < 0 ? 'neg' : ''}"></i></span>
+        <span class="mono">${w >= 0 ? '+' : '−'}${nf(Math.abs(w), 2)}</span></li>`).join('')}
+      </ul>
+      <p class="mono caps sub">${S.lat}: ${ms(L.total)}</p>
+      <p class="mono lat">Redpanda ${nf(L.ingest, 1)} · ${S.queue} ${nf(L.queue, 1)} · Flink ${nf(L.flink, 1)} · Redis ${nf(L.redis, 1)} · ${names.model[0]} ${nf(L.model, 1)} ms</p>`;
+  }
+
+  // Log de bloqueios com o motivo principal (maior contribuição para o score).
+  const log = root.querySelector<HTMLElement>('[data-log]')!;
+  const reasonName: Record<string, string> = { z: S.amount, velocity: S.vel, distance: S.dist, merchantRisk: S.merch };
+  function addBlocked(tx: Tx) {
+    const c = contributions(tx);
+    const top = (Object.entries(c) as [string, number][]).sort((a, b) => b[1] - a[1])[0][0];
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="mono">#${tx.id}</span> <span>${nf(tx.score * 100)}%</span> <span class="mono">${S.reason}: ${esc(reasonName[top])}</span>${tx.isFraud ? '' : ' <span class="mono fp">FP</span>'}`;
+    log.prepend(li);
+    while (log.children.length > 6) log.lastElementChild!.remove();
+  }
+
+  const canvas = root.querySelector<HTMLElement>('[data-canvas]')!;
+  let sec = 0;
+  const hooks = {
+    onTick(mt: ReturnType<FraudSim['metrics']>, s: FraudSim) {
+      m('tps').textContent = nf(s.params.tps);
+      m('util').textContent = `${S.util} ${pct(mt.utilization, 0)}${mt.backlog > 1 ? ` · ${S.backlog} ${nf(mt.backlog)}` : ''}`;
+      m('p50').textContent = ms(mt.p50);
+      m('p99').textContent = ms(mt.p99);
+      const ok = mt.p99 <= 20;
+      m('slo').textContent = ok ? `✓ ${S.sloOk}` : `▲ ${S.sloBad}`;
+      m('slo').classList.toggle('bad', !ok);
+      m('precision').textContent = pct(mt.precision);
+      m('recall').textContent = pct(mt.recall);
+      m('fbr').textContent = pct(mt.falseBlockRate, 2);
+      sec += 0.25;
+      if (sec >= 1) {
+        sec = 0;
+        chart.push(mt.p99);
+      }
+    },
+    onInspect: showTx,
+    onBlocked: addBlocked,
+  };
+
+  if (webglAvailable()) {
+    mountFraud(canvas, sim, hooks, names);
+  } else {
+    // Sem WebGL: a simulação e os números continuam funcionando.
+    canvas.innerHTML = `<p class="mono">${esc(document.documentElement.lang.startsWith('pt') ? 'WebGL indisponível: os números abaixo continuam ao vivo.' : 'WebGL unavailable: the numbers below are still live.')}</p>`;
+    let last = performance.now();
+    let acc = 0;
+    const loop = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      sim.step(dt);
+      acc += dt;
+      if (acc > 0.25) (acc = 0), hooks.onTick(sim.metrics(), sim);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+</script>
+
+<style>
+  .fraud-canvas { cursor: crosshair; }
+
+  .lower {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.8fr);
+    gap: 32px;
+    align-items: start;
+  }
+  .chart { margin: 0; }
+
+  .inspect { border-left: 1px solid var(--rule); padding-left: 20px; min-height: 220px; }
+  .inspect :global(h3) { margin-bottom: 10px; }
+  .inspect :global(.kv) { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0 0 14px; font-size: 0.9rem; }
+  .inspect :global(dt) { color: var(--muted); }
+  .inspect :global(dd) { margin: 0; }
+  .inspect :global(dd.red) { color: var(--red-ink); font-weight: 600; }
+  .inspect :global(.sub) { margin: 14px 0 6px; }
+  .inspect :global(.contrib) { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .inspect :global(.contrib li) { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 48px; gap: 10px; align-items: center; font-size: 0.82rem; }
+  .inspect :global(.contrib em) { display: block; font-style: normal; color: var(--muted); font-family: var(--mono); font-size: 0.7rem; }
+  .inspect :global(.bar) { height: 6px; background: var(--paper-2); }
+  .inspect :global(.bar i) { display: block; height: 100%; background: var(--ink); border-radius: 0 3px 3px 0; }
+  .inspect :global(.bar i.neg) { background: var(--muted); }
+  .inspect :global(.lat) { font-size: 0.72rem; }
+
+  .log h3 { margin-bottom: 10px; font-size: 0.78rem; }
+  .log ol { list-style: none; padding: 0; margin: 0; }
+  .log :global(li) { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 7px 0; border-bottom: 1px solid var(--rule); font-size: 0.85rem; }
+  .log :global(.fp) { color: var(--red-ink); }
+
+  @media (max-width: 960px) {
+    .lower { grid-template-columns: 1fr; }
+    .inspect { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 16px; min-height: 0; }
+  }
+</style>

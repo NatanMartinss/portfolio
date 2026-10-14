@@ -1,0 +1,401 @@
+---
+import type { Lang } from '../i18n/ui';
+import { SUGGESTIONS } from '../scenes/rag-corpus';
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+
+const S = {
+  en: {
+    ask: 'Ask', placeholder: 'Ask about Orbe Logística’s documents…', suggestions: 'Try a question',
+    role: 'You are', employee: 'Employee', hr: 'HR analyst', halluc: 'Simulate an LLM that makes things up',
+    guard: 'input guard', drag: 'Drag to orbit · hover a shape to read the chunk',
+    legend: ['● text', '■ table', '◆ figure', 'faded = restricted to HR'],
+    answer: 'Answer', trace: 'What happened, step by step', sources: 'Retrieved chunks', audit: 'Audit log',
+    idle: 'Pick a question above. You will see it fall into the vector space, pull its nearest chunks, and pass through the guards.',
+    steps: {
+      rate: 'Gateway · rate limit', cache: 'Gateway · cache', input: 'Input guard · prompt injection', retrieve: 'Retrieval · TF-IDF + ACL filter',
+      generate: 'Generation', pii: 'Output guard · PII', grounding: 'Output guard · grounding', audit: 'Audit queue',
+    },
+    msg: {
+      throttled: '429 · Too many requests. The gateway’s token bucket refills one request every 5 seconds. Without this, one runaway script can burn a month of LLM budget in an hour.',
+      injection: 'Blocked by the input guard before reaching retrieval or the model. Nothing was searched, nothing was generated.',
+      notFound: 'I couldn’t find this in the documents you can access.',
+      restrictedHint: 'Some documents are restricted to HR. Switch the role to see how the ACL filter changes retrieval.',
+      redacted: 'Personal data was redacted before the answer left the gateway.',
+      cached: 'Served from the gateway cache.',
+    },
+    decisions: { pass: 'PASS', redacted: 'REDACTED', flagged: 'FLAGGED', blocked: 'BLOCKED', throttled: '429' },
+    types: { text: 'text', table: 'table', figure: 'figure' },
+    page: 'p.', restricted: 'restricted: HR only',
+    try: 'Things to try',
+    lessons: [
+      'Ask about Carla Mendes’ salary as an Employee, then as HR. Access control happens at retrieval (the chunk is never even a candidate), not by asking the model to keep a secret.',
+      'As HR, notice the CPFs come back as black bars: PII is redacted at the output, even for people allowed to see the document.',
+      'Turn on the lying LLM and ask about expense reports. The grounding check catches the changed number because it appears in no source.',
+      'Ask the same thing twice: the second answer comes from the cache and costs zero tokens. Click fast enough and you will hit the rate limit.',
+    ],
+  },
+  pt: {
+    ask: 'Perguntar', placeholder: 'Pergunte sobre os documentos da Orbe Logística…', suggestions: 'Experimente uma pergunta',
+    role: 'Você é', employee: 'Colaborador', hr: 'Analista de RH', halluc: 'Simular um LLM que inventa coisas',
+    guard: 'guarda de entrada', drag: 'Arraste para girar · passe o mouse num formato para ler o trecho',
+    legend: ['● texto', '■ tabela', '◆ figura', 'apagado = restrito ao RH'],
+    answer: 'Resposta', trace: 'O que aconteceu, passo a passo', sources: 'Trechos recuperados', audit: 'Log de auditoria',
+    idle: 'Escolha uma pergunta acima. Você vai vê-la cair no espaço vetorial, puxar os trechos mais próximos e passar pelos guardas.',
+    steps: {
+      rate: 'Gateway · limite de requisições', cache: 'Gateway · cache', input: 'Guarda de entrada · prompt injection', retrieve: 'Recuperação · TF-IDF + filtro de ACL',
+      generate: 'Geração', pii: 'Guarda de saída · PII', grounding: 'Guarda de saída · aderência', audit: 'Fila de auditoria',
+    },
+    msg: {
+      throttled: '429 · Requisições demais. O balde de tokens do gateway recarrega uma requisição a cada 5 segundos. Sem isso, um script descontrolado queima o orçamento de LLM do mês em uma hora.',
+      injection: 'Bloqueada pelo guarda de entrada antes de chegar à recuperação ou ao modelo. Nada foi buscado, nada foi gerado.',
+      notFound: 'Não encontrei isso nos documentos que você pode acessar.',
+      restrictedHint: 'Alguns documentos são restritos ao RH. Troque o papel para ver como o filtro de ACL muda a recuperação.',
+      redacted: 'Dados pessoais foram mascarados antes de a resposta sair do gateway.',
+      cached: 'Servida pelo cache do gateway.',
+    },
+    decisions: { pass: 'OK', redacted: 'MASCARADA', flagged: 'SINALIZADA', blocked: 'BLOQUEADA', throttled: '429' },
+    types: { text: 'texto', table: 'tabela', figure: 'figura' },
+    page: 'p.', restricted: 'restrito: só RH',
+    try: 'O que experimentar',
+    lessons: [
+      'Pergunte o salário da Carla Mendes como Colaborador e depois como RH. O controle de acesso acontece na recuperação (o trecho nem vira candidato), não pedindo ao modelo para guardar segredo.',
+      'Como RH, repare que os CPFs voltam como tarjas pretas: PII é mascarada na saída, mesmo para quem pode ver o documento.',
+      'Ligue o LLM mentiroso e pergunte sobre o relatório de despesas. A checagem de aderência pega o número alterado, porque ele não aparece em nenhuma fonte.',
+      'Pergunte a mesma coisa duas vezes: a segunda resposta vem do cache e custa zero tokens. Clique rápido o bastante e você bate no limite de requisições.',
+    ],
+  },
+}[lang];
+
+---
+<div class="demo" id="rag-demo" data-s={JSON.stringify(S)} data-lang={lang}>
+  <form class="ask" data-form>
+    <label class="visually-hidden" for="rag-q">{S.placeholder}</label>
+    <input id="rag-q" name="q" type="text" autocomplete="off" placeholder={S.placeholder} maxlength="200" />
+    <button class="btn" type="submit">{S.ask}</button>
+  </form>
+  <div class="opts">
+    <div class="chips" role="group" aria-label={S.suggestions}>
+      {SUGGESTIONS[lang].map((q) => <button type="button" class="chip" data-q={q}>{q}</button>)}
+    </div>
+    <div class="opts-row">
+      <div class="field-inline">
+        <span class="mono">{S.role}</span>
+        <div class="seg" role="radiogroup" aria-label={S.role}>
+          <label><input type="radio" name="role" value="employee" checked /><span>{S.employee}</span></label>
+          <label><input type="radio" name="role" value="hr" /><span>{S.hr}</span></label>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" name="halluc" /> <span class="mono">{S.halluc}</span></label>
+      <span class="mono bucket" data-bucket aria-live="polite"></span>
+    </div>
+  </div>
+
+  <div>
+    <div class="stage-canvas rag-canvas" data-canvas>
+      <div class="rag-tip" data-tip hidden></div>
+    </div>
+    <p class="mono stage-note">{S.drag} · {S.legend.join(' · ')}</p>
+  </div>
+
+  <div class="rag-lower">
+    <div>
+      <section class="answer" aria-live="polite">
+        <h3 class="mono caps">{S.answer}</h3>
+        <div class="answer-body" data-answer><p class="muted">{S.idle}</p></div>
+      </section>
+      <section class="sources">
+        <h3 class="mono caps">{S.sources}</h3>
+        <ol data-sources></ol>
+      </section>
+    </div>
+    <aside class="trace">
+      <h3 class="mono caps">{S.trace}</h3>
+      <ol data-trace></ol>
+    </aside>
+  </div>
+
+  <section class="auditlog">
+    <h3 class="mono caps">{S.audit}</h3>
+    <ol data-audit></ol>
+  </section>
+
+  <div class="try">
+    <h3>{S.try}</h3>
+    <ol>{S.lessons.map((l) => <li>{l}</li>)}</ol>
+  </div>
+</div>
+
+<script>
+  import { RagPipeline, redactPII, type Role, type RunResult, type Step } from '../scenes/rag-sim';
+  import { CHUNKS, DOCS } from '../scenes/rag-corpus';
+  import { mountRag, type RagView } from '../scenes/rag';
+  import { webglAvailable } from '../scenes/common';
+
+  const root = document.getElementById('rag-demo')!;
+  const S = JSON.parse(root.dataset.s!);
+  const lang = root.dataset.lang === 'pt' ? 'pt' : 'en';
+  const pt = lang === 'pt';
+  const nf = (n: number, d = 2) => n.toLocaleString(pt ? 'pt-BR' : 'en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const docOf = (key: string) => DOCS.find((d) => d.key === key)!;
+
+  // Textos com parâmetros (as funções não atravessam o JSON).
+  const D = pt
+    ? {
+        left: (l: number, c: number) => `${l}/${c} requisições restantes no balde`,
+        throttled: '429: balde vazio, recarrega 1 requisição a cada 5 s',
+        hit: 'acerto: resposta reaproveitada, 0 tokens de LLM', miss: 'não estava no cache',
+        clean: 'limpa', blocked: (r: string) => `bloqueada (regra: ${r})`,
+        retrieved: (k: number, of: number, hidden: number, best: string) => `top ${k} de ${of} trechos acessíveis${hidden ? ` (${hidden} escondidos pela ACL)` : ''} · melhor cosseno ${best}`,
+        extractive: (t: number) => `extrativa: frases copiadas das fontes, sem LLM nesta demo · ~${t} tokens de prompt`,
+        llm: (t: number) => `LLM simulado que às vezes altera fatos · ~${t} tokens de prompt`,
+        nothing: 'pulada: nada relevante encontrado',
+        pii: (n: number, k: string) => (n ? `${n} item(ns) mascarado(s) (${k})` : 'nada encontrado'),
+        grounding: (ok: number, n: number, bad: string) => `${ok}/${n} frases sustentadas${bad ? ` · ${bad} não está em nenhuma fonte` : ''}`,
+        audit: 'evento publicado (fila simulada)', skipped: 'pulado (acerto no cache)',
+        flagged: (n: string) => `A checagem de aderência removeu uma frase: ${n} não aparece em nenhuma fonte recuperada. Em produção, esta resposta seria retida ou gerada de novo.`,
+      }
+    : {
+        left: (l: number, c: number) => `${l}/${c} requests left in the bucket`,
+        throttled: '429: bucket empty, refills 1 request every 5 s',
+        hit: 'hit: answer reused, 0 LLM tokens', miss: 'miss',
+        clean: 'clean', blocked: (r: string) => `blocked (rule: ${r})`,
+        retrieved: (k: number, of: number, hidden: number, best: string) => `top ${k} of ${of} accessible chunks${hidden ? ` (${hidden} hidden by ACL)` : ''} · best cosine ${best}`,
+        extractive: (t: number) => `extractive: sentences copied from sources, no LLM in this demo · ~${t} prompt tokens`,
+        llm: (t: number) => `simulated LLM that sometimes changes facts · ~${t} prompt tokens`,
+        nothing: 'skipped: nothing relevant found',
+        pii: (n: number, k: string) => (n ? `${n} item(s) redacted (${k})` : 'none found'),
+        grounding: (ok: number, n: number, bad: string) => `${ok}/${n} sentences supported${bad ? ` · ${bad} not in any source` : ''}`,
+        audit: 'event published (simulated queue)', skipped: 'skipped (cache hit)',
+        flagged: (n: string) => `The grounding check removed a sentence: ${n} does not appear in any retrieved source. In production this answer would be withheld or regenerated.`,
+      };
+
+  const pipeline = new RagPipeline(lang);
+  let role: Role = 'employee';
+  let busy = false;
+
+  // Rate limit visível: o balde recarrega com o tempo.
+  const bucket = root.querySelector<HTMLElement>('[data-bucket]')!;
+  let lastT = performance.now();
+  setInterval(() => {
+    const now = performance.now();
+    pipeline.refill((now - lastT) / 1000);
+    lastT = now;
+    bucket.textContent = '▮'.repeat(Math.floor(pipeline.tokens)) + '▯'.repeat(pipeline.capacity - Math.floor(pipeline.tokens));
+    bucket.title = D.left(Math.floor(pipeline.tokens), pipeline.capacity);
+  }, 250);
+
+  // Tooltip dos glifos, respeitando a ACL (texto restrito não aparece para quem não pode ver).
+  const tip = root.querySelector<HTMLElement>('[data-tip]')!;
+  function hover(i: number | null, x: number, y: number) {
+    if (i === null) return void (tip.hidden = true);
+    const c = CHUNKS[i];
+    const d = docOf(c.doc);
+    const locked = d.acl === 'hr' && role === 'employee';
+    tip.innerHTML = `<span class="mono">${esc(d.title[lang])} · ${S.page} ${c.page} · ${S.types[c.type]}</span>
+      <p>${locked ? `<em>${S.restricted}</em>` : esc(redactPII(c.text[lang]).text.replace(/⟦(\w+):\d+⟧/g, '▇▇▇'))}</p>`;
+    tip.hidden = false;
+    tip.style.left = `${Math.min(x + 14, (tip.parentElement!.clientWidth || 600) - 300)}px`;
+    tip.style.top = `${y + 14}px`;
+  }
+
+  const canvas = root.querySelector<HTMLElement>('[data-canvas]')!;
+  let view: RagView | null = null;
+  if (webglAvailable()) view = mountRag(canvas, pipeline.ix.coords, lang, { guard: S.guard }, hover);
+  else canvas.insertAdjacentHTML('beforeend', `<p class="mono">${pt ? 'WebGL indisponível: o pipeline abaixo continua funcionando.' : 'WebGL unavailable: the pipeline below still works.'}</p>`);
+  view?.setRole(role);
+
+  root.querySelectorAll<HTMLInputElement>('input[name=role]').forEach((r) =>
+    r.addEventListener('change', () => {
+      role = r.value as Role;
+      view?.setRole(role);
+    }),
+  );
+  const halluc = root.querySelector<HTMLInputElement>('input[name=halluc]')!;
+
+  // Rastro do pipeline.
+  const traceEl = root.querySelector<HTMLElement>('[data-trace]')!;
+  function stepText(s: Step) {
+    const d = s.detail as Record<string, never>;
+    if (s.status === 'skip') return s.key === 'generate' ? D.nothing : D.skipped;
+    switch (s.key) {
+      case 'rate': return s.status === 'block' ? D.throttled : D.left(d.left, d.cap);
+      case 'cache': return d.hit ? D.hit : D.miss;
+      case 'input': return s.status === 'block' ? D.blocked(d.rule) : D.clean;
+      case 'retrieve': return D.retrieved(d.k, d.of, d.total - d.of, nf(d.best));
+      case 'generate': return d.mode === 'llm' ? D.llm(d.tokens) : D.extractive(d.tokens);
+      case 'pii': return D.pii(d.n, d.kinds);
+      case 'grounding': return D.grounding(d.ok, d.n, d.badNums);
+      case 'audit': return D.audit;
+    }
+  }
+  const icon = { ok: '●', warn: '▲', block: '■', skip: '○' };
+  function traceItem(s: Step) {
+    const li = document.createElement('li');
+    li.className = `st st-${s.status}`;
+    li.innerHTML = `<span class="st-icon" aria-hidden="true">${icon[s.status]}</span>
+      <span><strong>${S.steps[s.key]}</strong><span class="st-detail">${esc(stepText(s))}</span></span>
+      <span class="mono st-ms">${s.ms > 0.005 ? `${nf(s.ms)} ms` : ''}</span>`;
+    return li;
+  }
+
+  const answerEl = root.querySelector<HTMLElement>('[data-answer]')!;
+  const sourcesEl = root.querySelector<HTMLElement>('[data-sources]')!;
+  const auditEl = root.querySelector<HTMLElement>('[data-audit]')!;
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  function renderAnswer(r: RunResult) {
+    const notes: string[] = [];
+    let body = '';
+    if (r.blocked === 'rate') body = `<p class="bad">${S.msg.throttled}</p>`;
+    else if (r.blocked === 'injection') body = `<p class="bad">■ ${S.msg.injection}</p>`;
+    else if (r.notFound) {
+      body = `<p>${S.msg.notFound}</p>`;
+      if (role === 'employee') notes.push(S.msg.restrictedHint);
+    } else if (r.answer) {
+      body = `<p class="answer-text">${r.answer.html}</p>`;
+      const g = r.steps.find((s) => s.key === 'grounding');
+      if (r.decision === 'flagged' && g) notes.push(`▲ ${D.flagged(String(g.detail.badNums))}`);
+      if (r.steps.some((s) => s.key === 'pii' && Number(s.detail.n) > 0)) notes.push(S.msg.redacted);
+    }
+    if (r.cached) notes.push(S.msg.cached);
+    answerEl.innerHTML = body + notes.map((n) => `<p class="note mono">${esc(n)}</p>`).join('');
+
+    sourcesEl.innerHTML = r.hits
+      .map((h, i) => {
+        const d = docOf(h.chunk.doc);
+        const text = redactPII(h.chunk.text[lang]).text.replace(/⟦(\w+):\d+⟧/g, '▇▇▇');
+        return `<li class="${h.score < 0.12 ? 'weak' : ''}">
+          <span class="mono src-meta">[${i + 1}] ${esc(d.title[lang])} · ${S.page} ${h.chunk.page} · ${S.types[h.chunk.type]} · cos ${nf(h.score)}</span>
+          <span class="src-bar"><i style="width:${Math.min(100, h.score * 140)}%"></i></span>
+          <span class="src-text">${esc(text)}</span></li>`;
+      })
+      .join('');
+  }
+
+  function addAudit(r: RunResult) {
+    const li = document.createElement('li');
+    const time = new Date().toLocaleTimeString(pt ? 'pt-BR' : 'en-US', { hour12: false });
+    const q = redactPII(r.query).text.replace(/⟦(\w+):\d+⟧/g, '[$1]');
+    const bad = r.decision !== 'pass';
+    li.innerHTML = `<span class="mono">${time}</span> <span class="tag ${bad ? 'tag--red' : ''}">${S.decisions[r.decision]}</span> <span class="mono">${role === 'hr' ? S.hr : S.employee}</span> <span class="aq">${esc(q.length > 70 ? q.slice(0, 70) + '…' : q)}</span>`;
+    auditEl.prepend(li);
+    while (auditEl.children.length > 8) auditEl.lastElementChild!.remove();
+  }
+
+  async function ask(q: string) {
+    q = q.trim();
+    if (!q || busy) return;
+    busy = true;
+    const r = pipeline.run(q, role, halluc.checked);
+    traceEl.innerHTML = '';
+    answerEl.innerHTML = '<p class="muted mono">…</p>';
+    sourcesEl.innerHTML = '';
+    const anim = view ? view.play(r) : Promise.resolve();
+    // Revela os passos em sincronia aproximada com a animação 3D.
+    for (const s of r.steps) {
+      traceEl.appendChild(traceItem(s));
+      if (s.key === 'input' && !r.blocked) await Promise.race([anim, wait(900)]);
+      else await wait(r.cached ? 60 : 160);
+    }
+    await anim;
+    renderAnswer(r);
+    addAudit(r);
+    busy = false;
+  }
+
+  const input = root.querySelector<HTMLInputElement>('#rag-q')!;
+  root.querySelector('[data-form]')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    ask(input.value);
+  });
+  root.querySelectorAll<HTMLButtonElement>('[data-q]').forEach((b) =>
+    b.addEventListener('click', () => {
+      input.value = b.dataset.q!;
+      ask(b.dataset.q!);
+    }),
+  );
+</script>
+
+<style>
+  .ask { display: flex; gap: 8px; border-top: 1px solid var(--ink); padding-top: 18px; }
+  .ask input {
+    flex: 1; min-width: 0;
+    font: 1.05rem var(--sans); padding: 10px 12px;
+    background: var(--paper); color: var(--ink);
+    border: 1px solid var(--ink); border-radius: 0;
+  }
+  .ask input:focus-visible { outline: 2px solid var(--red); outline-offset: 0; }
+  .opts { display: grid; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid var(--ink); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font: 0.82rem var(--sans); text-align: left;
+    padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px;
+    background: transparent; color: var(--ink-2); cursor: pointer;
+  }
+  .chip:hover { border-color: var(--ink); color: var(--ink); }
+  .opts-row { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+  .field-inline { display: flex; gap: 10px; align-items: center; }
+  .check { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+  .check input { accent-color: var(--red); width: 16px; height: 16px; }
+  .bucket { letter-spacing: 0.15em; color: var(--ink); }
+
+  .rag-canvas { cursor: grab; }
+  .rag-canvas :global(.rag-doc) {
+    font: 0.7rem/1.2 var(--mono); color: var(--muted); text-align: center; max-width: 140px;
+    background: color-mix(in srgb, var(--paper) 80%, transparent); padding: 1px 4px;
+  }
+  .rag-canvas :global(.rag-rank) {
+    font: 600 0.68rem var(--mono); color: var(--paper); background: var(--red);
+    min-width: 18px; text-align: center; padding: 1px 4px;
+  }
+  .rag-canvas :global(.rag-rank.weak) { background: var(--muted); }
+  .rag-tip {
+    position: absolute; z-index: 2; width: 290px; pointer-events: none;
+    background: var(--ink); color: var(--paper); padding: 10px 12px; font-size: 0.82rem;
+  }
+  .rag-tip :global(.mono) { color: #b9b2a3; }
+  .rag-tip :global(p) { margin: 6px 0 0; }
+
+  .rag-lower { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .rag-lower h3, .auditlog h3 { font-size: 0.78rem; margin-bottom: 10px; }
+  .answer { border-top: 1px solid var(--ink); padding-top: 14px; min-height: 120px; }
+  .answer-body :global(.answer-text) { font-family: var(--serif); font-size: 1.3rem; line-height: 1.45; max-width: 60ch; }
+  .answer-body :global(sup) { font: 0.7rem var(--mono); color: var(--red-ink); }
+  .answer-body :global(.redact) { background: var(--ink); color: transparent; user-select: none; border-radius: 2px; }
+  .answer-body :global(.ungrounded) { color: var(--red-ink); text-decoration-thickness: 2px; }
+  .answer-body :global(.note) { color: var(--ink-2); margin: 8px 0 0; }
+  .answer-body :global(.muted) { color: var(--muted); }
+  .sources { margin-top: 26px; }
+  .sources ol { list-style: none; margin: 0; padding: 0; }
+  .sources :global(li) { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+  .sources :global(li.weak) { opacity: 0.45; }
+  .sources :global(.src-meta) { font-size: 0.72rem; color: var(--muted); }
+  .sources :global(.src-bar) { height: 4px; background: var(--paper-2); }
+  .sources :global(.src-bar i) { display: block; height: 100%; background: var(--ink); border-radius: 0 2px 2px 0; }
+  .sources :global(.src-text) { font-size: 0.9rem; color: var(--ink-2); }
+
+  .trace { border-top: 1px solid var(--ink); padding-top: 14px; }
+  .trace ol { list-style: none; margin: 0; padding: 0; }
+  .trace :global(.st) { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 0.86rem; animation: rise 0.25s ease both; }
+  .trace :global(.st strong) { display: block; font-weight: 600; }
+  .trace :global(.st-detail) { display: block; color: var(--ink-2); font-size: 0.8rem; }
+  .trace :global(.st-ms) { font-size: 0.7rem; color: var(--muted); }
+  .trace :global(.st-warn .st-icon), .trace :global(.st-block .st-icon), .trace :global(.st-block strong) { color: var(--red-ink); }
+  .trace :global(.st-skip) { color: var(--muted); }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .auditlog { border-top: 1px solid var(--ink); padding-top: 14px; }
+  .auditlog ol { list-style: none; margin: 0; padding: 0; }
+  .auditlog :global(li) { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--rule); font-size: 0.85rem; }
+  .auditlog :global(.aq) { color: var(--ink-2); }
+
+  @media (max-width: 560px) {
+    .rag-canvas :global(.rag-doc) { display: none; }
+  }
+  @media (max-width: 960px) {
+    .rag-lower { grid-template-columns: 1fr; }
+    .ask { flex-direction: column; }
+  }
+</style>

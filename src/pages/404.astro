@@ -1,0 +1,16 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base lang="en" title="404" altHref="/pt/">
+  <section class="wrap nf">
+    <p class="mono caps">Fig. 404</p>
+    <h1>Nothing at this address.</h1>
+    <p lang="pt-BR" class="pt">Nada neste endereço.</p>
+    <p class="mono"><a href="/">← Index</a> · <a href="/pt/">← Índice</a></p>
+  </section>
+</Base>
+
+<style>
+  .nf { padding-block: clamp(48px, 10vw, 140px); }
+  .pt { font-family: var(--serif); font-size: 1.5rem; color: var(--ink-2); margin-top: 16px; }
+</style>

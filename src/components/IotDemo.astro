@@ -1,0 +1,335 @@
+---
+import type { Lang } from '../i18n/ui';
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+
+const S = {
+  en: {
+    inject: 'Inject a fault', bearing: 'Bearing wear', imbalance: 'Imbalance', overheat: 'Overheating', reset: 'Reset machine',
+    speed: 'Time speed', thr: 'Alert threshold', auto: 'auto',
+    day: 'Day', temp: 'Bearing temp.', rms: 'Vibration RMS', kurt: 'Kurtosis', score: 'Anomaly score',
+    status: 'Status', normal: 'Normal', alert: 'Alert', failed: 'Failed',
+    chart: 'Anomaly score (smoothed) per 6-hour window', thrRef: 'threshold', dayW: 'day',
+    wave: 'Vibration signal, last 0.1 s window', spec: 'Spectrum of the same window', specHint: 'Hover the spectrum to read frequencies.',
+    shaft: '1× rotation', reso: 'impact resonance',
+    events: 'Timeline of this run', evFault: 'Fault starts', evAlert: 'Isolation Forest alert', evRms: 'Classic alarm (RMS > 1.4× / temp > 70 °C)', evFail: 'Failure',
+    before: 'days before failure', none: '—', falseAlarms: 'False alarms while healthy',
+    drag: 'Drag to orbit · scroll to zoom',
+    training: 'Training the Isolation Forest on 400 healthy windows…',
+    try: 'Things to try',
+    lessons: [
+      'Inject bearing wear and watch the spectrum: impacts excite a resonance near 2.3 kHz long before the overall RMS moves. The model sees it; the classic alarm doesn’t.',
+      'Reset and inject imbalance: here the 1× rotation peak grows and RMS works fine too. The model’s advantage is smaller, and the timeline shows it honestly.',
+      'Lower the threshold and let the healthy machine run: false alarms appear. Every alert threshold is a trade between lead time and operator trust.',
+    ],
+  },
+  pt: {
+    inject: 'Injetar um defeito', bearing: 'Desgaste do rolamento', imbalance: 'Desbalanceamento', overheat: 'Superaquecimento', reset: 'Reiniciar máquina',
+    speed: 'Velocidade do tempo', thr: 'Limiar de alerta', auto: 'auto',
+    day: 'Dia', temp: 'Temp. do mancal', rms: 'RMS da vibração', kurt: 'Curtose', score: 'Score de anomalia',
+    status: 'Estado', normal: 'Normal', alert: 'Alerta', failed: 'Falhou',
+    chart: 'Score de anomalia (suavizado) por janela de 6 horas', thrRef: 'limiar', dayW: 'dia',
+    wave: 'Sinal de vibração, última janela de 0,1 s', spec: 'Espectro da mesma janela', specHint: 'Passe o mouse no espectro para ler as frequências.',
+    shaft: '1× rotação', reso: 'ressonância dos impactos',
+    events: 'Linha do tempo desta execução', evFault: 'Defeito começa', evAlert: 'Alerta do Isolation Forest', evRms: 'Alarme clássico (RMS > 1,4× / temp > 70 °C)', evFail: 'Falha',
+    before: 'dias antes da falha', none: '—', falseAlarms: 'Alarmes falsos com a máquina saudável',
+    drag: 'Arraste para girar · role para aproximar',
+    training: 'Treinando o Isolation Forest com 400 janelas saudáveis…',
+    try: 'O que experimentar',
+    lessons: [
+      'Injete desgaste no rolamento e observe o espectro: os impactos excitam uma ressonância perto de 2,3 kHz muito antes do RMS geral se mexer. O modelo vê; o alarme clássico não.',
+      'Reinicie e injete desbalanceamento: aqui o pico de 1× rotação cresce e o RMS também funciona. A vantagem do modelo é menor, e a linha do tempo mostra isso com honestidade.',
+      'Baixe o limiar e deixe a máquina saudável rodando: aparecem alarmes falsos. Todo limiar é uma troca entre antecedência e confiança do operador.',
+    ],
+  },
+}[lang];
+
+const names = lang === 'en'
+  ? { motor: ['Motor', '1480 rpm'], bearing: ['Bearing', 'fails first'], pump: ['Pump', 'load'], broker: ['MQTT broker', 'Mosquitto'], influx: ['InfluxDB', 'time series'], sensor: ['Sensor', 'accel · temp'] }
+  : { motor: ['Motor', '1480 rpm'], bearing: ['Mancal', 'falha primeiro'], pump: ['Bomba', 'carga'], broker: ['Broker MQTT', 'Mosquitto'], influx: ['InfluxDB', 'séries temporais'], sensor: ['Sensor', 'acel · temp'] };
+---
+<div class="demo" id="iot-demo" data-s={JSON.stringify(S)} data-names={JSON.stringify(names)} data-lang={lang}>
+  <div class="controls">
+    <div class="field">
+      <span class="mono">{S.inject}</span>
+      <div class="btn-row">
+        <button type="button" class="btn" data-fault="bearing">{S.bearing}</button>
+        <button type="button" class="btn" data-fault="imbalance">{S.imbalance}</button>
+        <button type="button" class="btn" data-fault="overheat">{S.overheat}</button>
+        <button type="button" class="btn btn--ghost" data-reset>{S.reset}</button>
+      </div>
+    </div>
+    <div class="field">
+      <span class="mono">{S.speed}</span>
+      <div class="seg" role="radiogroup" aria-label={S.speed}>
+        <label><input type="radio" name="speed" value="0.5" checked /><span>1×</span></label>
+        <label><input type="radio" name="speed" value="1.5" /><span>3×</span></label>
+      </div>
+    </div>
+    <label>
+      <span class="mono">{S.thr} <output data-out="thr">–</output></span>
+      <input type="range" name="thr" min="0.45" max="0.75" step="0.01" value="0.6" />
+    </label>
+  </div>
+
+  <div>
+    <div class="stage-canvas" data-canvas></div>
+    <p class="mono stage-note">{S.drag} · <span data-trained>{S.training}</span></p>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><span class="mono">{S.day}</span><strong data-m="day">–</strong></div>
+    <div class="tile"><span class="mono">{S.temp}</span><strong data-m="temp">–</strong></div>
+    <div class="tile"><span class="mono">{S.rms}</span><strong data-m="rms">–</strong></div>
+    <div class="tile"><span class="mono">{S.kurt}</span><strong data-m="kurt">–</strong></div>
+    <div class="tile"><span class="mono">{S.score}</span><strong data-m="score">–</strong></div>
+    <div class="tile"><span class="mono">{S.status}</span><strong data-m="status">–</strong></div>
+  </div>
+
+  <div class="iot-lower">
+    <figure class="iot-chart">
+      <div data-chart></div>
+      <figcaption class="fig-caption">{S.chart}</figcaption>
+    </figure>
+    <aside class="timeline" aria-live="polite">
+      <h3 class="mono caps">{S.events}</h3>
+      <dl data-events></dl>
+    </aside>
+  </div>
+
+  <div class="signals">
+    <figure>
+      <canvas data-wave height="140"></canvas>
+      <figcaption class="fig-caption">{S.wave}</figcaption>
+    </figure>
+    <figure>
+      <canvas data-spec height="140"></canvas>
+      <figcaption class="fig-caption" data-spec-read>{S.spec} · {S.specHint}</figcaption>
+    </figure>
+  </div>
+
+  <div class="try">
+    <h3>{S.try}</h3>
+    <ol>{S.lessons.map((l) => <li>{l}</li>)}</ol>
+  </div>
+</div>
+
+<script>
+  import { Machine, FS, N, SHAFT_HZ, RESONANCE_HZ, type Fault, type Reading } from '../scenes/iot-sim';
+  import { mountIot } from '../scenes/iot';
+  import { webglAvailable } from '../scenes/common';
+  import { createLineChart } from '../scenes/chart';
+
+  const root = document.getElementById('iot-demo')!;
+  const S = JSON.parse(root.dataset.s!);
+  const names = JSON.parse(root.dataset.names!);
+  const pt = root.dataset.lang === 'pt';
+  const locale = pt ? 'pt-BR' : 'en-US';
+  const nf = (n: number, d = 0) => n.toLocaleString(locale, { minimumFractionDigits: d, maximumFractionDigits: d });
+  const css = getComputedStyle(document.documentElement);
+  const C = { ink: css.getPropertyValue('--ink').trim(), muted: css.getPropertyValue('--muted').trim(), rule: css.getPropertyValue('--rule').trim(), red: css.getPropertyValue('--red').trim() };
+
+  // Treina o modelo aqui mesmo, no navegador.
+  const machine = new Machine();
+  const t0 = performance.now();
+  machine.train();
+  const trainedMs = Math.round(performance.now() - t0);
+  root.querySelector('[data-trained]')!.textContent = pt
+    ? `Modelo treinado no seu navegador em ${trainedMs} ms com 400 janelas saudáveis. Limiar automático: ${nf(machine.autoThreshold, 2)} (percentil 99,5 dos scores saudáveis).`
+    : `Model trained in your browser in ${trainedMs} ms on 400 healthy windows. Automatic threshold: ${nf(machine.autoThreshold, 2)} (99.5th percentile of healthy scores).`;
+
+  // Controles.
+  const thr = root.querySelector<HTMLInputElement>('input[name=thr]')!;
+  const thrOut = root.querySelector('[data-out="thr"]')!;
+  thr.value = String(machine.autoThreshold);
+  const applyThr = () => {
+    machine.threshold = Number(thr.value);
+    const isAuto = Math.abs(machine.threshold - machine.autoThreshold) < 0.005;
+    thrOut.textContent = `${nf(machine.threshold, 2)}${isAuto ? ` (${S.auto})` : ''}`;
+    chart.setReference(machine.threshold);
+  };
+  thr.addEventListener('input', applyThr);
+  root.querySelectorAll<HTMLInputElement>('input[name=speed]').forEach((r) =>
+    r.addEventListener('change', () => (machine.daysPerSecond = Number(r.value))),
+  );
+  const faultBtns = root.querySelectorAll<HTMLButtonElement>('[data-fault]');
+  faultBtns.forEach((b) =>
+    b.addEventListener('click', () => {
+      machine.inject(b.dataset.fault as Fault);
+      chart.mark(pt ? 'defeito' : 'fault');
+      faultBtns.forEach((x) => (x.disabled = true));
+    }),
+  );
+  root.querySelector('[data-reset]')!.addEventListener('click', () => {
+    machine.reset();
+    chart.reset();
+    marked.clear();
+    faultBtns.forEach((x) => (x.disabled = false));
+    renderEvents();
+  });
+
+  // Gráfico do score.
+  const chart = createLineChart(root.querySelector<HTMLElement>('[data-chart]')!, {
+    label: S.chart,
+    capacity: 160,
+    minMax: 1,
+    step: 0.25,
+    format: (v) => nf(v, 2),
+    tip: (n) => `${S.dayW} ${nf(Math.max(0, machine.day - n / machine.windowsPerDay), 1)}`,
+    reference: { value: machine.threshold, text: S.thrRef },
+  });
+  applyThr();
+
+  // Linha do tempo dos eventos.
+  const evBox = root.querySelector<HTMLElement>('[data-events]')!;
+  const marked = new Set<string>();
+  function renderEvents() {
+    const e = machine.events;
+    const fail = e.failureDay;
+    const lead = (d: number | null) => (d !== null && fail !== null ? ` · ${nf(fail - d, 1)} ${S.before}` : '');
+    const row = (k: string, d: number | null, extra = '') =>
+      `<dt>${k}</dt><dd>${d === null ? S.none : `${S.dayW} ${nf(d, 1)}${extra}`}</dd>`;
+    evBox.innerHTML =
+      row(S.evFault, e.faultDay) +
+      row(S.evAlert, e.alertDay, lead(e.alertDay)) +
+      row(S.evRms, e.rmsAlarmDay, lead(e.rmsAlarmDay)) +
+      row(S.evFail, e.failureDay) +
+      `<dt>${S.falseAlarms}</dt><dd>${e.falseAlarms}</dd>`;
+  }
+  renderEvents();
+
+  // Forma de onda e espectro em canvas 2D.
+  const wave = root.querySelector<HTMLCanvasElement>('[data-wave]')!;
+  const spec = root.querySelector<HTMLCanvasElement>('[data-spec]')!;
+  const specRead = root.querySelector<HTMLElement>('[data-spec-read]')!;
+  function fit(cv: HTMLCanvasElement) {
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    const w = cv.clientWidth;
+    const h = 140;
+    if (cv.width !== w * dpr) {
+      cv.width = w * dpr;
+      cv.height = h * dpr;
+    }
+    const g = cv.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    return { g, w, h };
+  }
+  let specMax = 0.6;
+  function drawSignals(r: Reading) {
+    {
+      const { g, w, h } = fit(wave);
+      g.strokeStyle = C.rule;
+      g.beginPath();
+      g.moveTo(0, h / 2);
+      g.lineTo(w, h / 2);
+      g.stroke();
+      const amp = Math.max(2, ...Array.from(r.signal, Math.abs));
+      g.strokeStyle = C.ink;
+      g.lineWidth = 1.25;
+      g.beginPath();
+      for (let n = 0; n < N; n++) {
+        const x = (n / (N - 1)) * w;
+        const y = h / 2 - (r.signal[n] / amp) * (h / 2 - 6);
+        n ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.stroke();
+    }
+    {
+      const { g, w, h } = fit(spec);
+      const bins = r.spectrum.length;
+      specMax = Math.max(0.6, specMax * 0.98, ...Array.from(r.spectrum));
+      const fx = (f: number) => (f / (FS / 2)) * w;
+      // Faixas anotadas: 1× rotação e a ressonância excitada pelos impactos.
+      g.fillStyle = C.rule;
+      g.globalAlpha = 0.35;
+      g.fillRect(fx(RESONANCE_HZ - 250), 0, fx(500), h - 16);
+      g.globalAlpha = 1;
+      g.font = '10px "IBM Plex Mono", monospace';
+      g.fillStyle = C.muted;
+      g.fillText(S.shaft, fx(SHAFT_HZ) + 4, 12);
+      g.textAlign = 'right';
+      g.fillText(S.reso, fx(RESONANCE_HZ - 250) - 4, 12);
+      g.textAlign = 'left';
+      g.strokeStyle = C.ink;
+      g.lineWidth = 1.5;
+      g.beginPath();
+      for (let k = 1; k < bins; k++) {
+        const x = fx((k * FS) / N);
+        const y = h - 16 - Math.sqrt(r.spectrum[k] / specMax) * (h - 30);
+        g.moveTo(x, h - 16);
+        g.lineTo(x, y);
+      }
+      g.stroke();
+      g.fillStyle = C.muted;
+      for (const f of [0, 500, 1000, 1500, 2000, 2500]) g.fillText(`${f}`, Math.min(w - 26, fx(f) + 2), h - 3);
+    }
+  }
+  spec.addEventListener('pointermove', (e) => {
+    const r = machine.last;
+    if (!r) return;
+    const rect = spec.getBoundingClientRect();
+    const f = ((e.clientX - rect.left) / rect.width) * (FS / 2);
+    const k = Math.max(1, Math.min(r.spectrum.length - 1, Math.round((f * N) / FS)));
+    specRead.textContent = `${nf((k * FS) / N)} Hz · ${nf(r.spectrum[k], 3)} g`;
+  });
+  spec.addEventListener('pointerleave', () => (specRead.textContent = `${S.spec} · ${S.specHint}`));
+
+  // Indicadores a cada leitura.
+  const m = (k: string) => root.querySelector<HTMLElement>(`[data-m="${k}"]`)!;
+  function onReadings(rs: Reading[]) {
+    for (const r of rs) chart.push(r.smooth);
+    const r = rs[rs.length - 1];
+    const e = machine.events;
+    if (e.alertDay !== null && !marked.has('alert')) marked.add('alert'), chart.mark(pt ? 'alerta' : 'alert');
+    if (e.rmsAlarmDay !== null && !marked.has('rms')) marked.add('rms'), chart.mark(pt ? 'clássico' : 'classic');
+    if (e.failureDay !== null && !marked.has('fail')) marked.add('fail'), chart.mark(pt ? 'falha' : 'failure');
+    m('day').textContent = nf(machine.day, 1);
+    m('temp').textContent = `${nf(r.temp, 1)} °C`;
+    m('rms').textContent = `${nf(r.rms, 2)} g`;
+    m('kurt').textContent = nf(r.kurtosis, 2);
+    m('score').textContent = nf(r.smooth, 2);
+    m('score').classList.toggle('bad', r.smooth > machine.threshold);
+    const st = machine.failed ? `■ ${S.failed}` : machine.alerting ? `▲ ${S.alert}` : `● ${S.normal}`;
+    m('status').textContent = st;
+    m('status').classList.toggle('bad', machine.failed || machine.alerting);
+    drawSignals(r);
+    renderEvents();
+  }
+
+  const canvas = root.querySelector<HTMLElement>('[data-canvas]')!;
+  if (webglAvailable()) {
+    mountIot(canvas, machine, { onReadings }, names);
+  } else {
+    canvas.innerHTML = `<p class="mono">${pt ? 'WebGL indisponível: os gráficos abaixo continuam ao vivo.' : 'WebGL unavailable: the charts below are still live.'}</p>`;
+    let last = performance.now();
+    const loop = (now: number) => {
+      const rs = machine.step(Math.min((now - last) / 1000, 0.05));
+      last = now;
+      if (rs.length) onReadings(rs);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+</script>
+
+<style>
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .controls { grid-template-columns: minmax(0, 2.4fr) minmax(0, 0.7fr) minmax(0, 1fr); }
+  .iot-lower { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .iot-chart { margin: 0; }
+  .timeline { border-left: 1px solid var(--rule); padding-left: 20px; }
+  .timeline h3 { font-size: 0.78rem; margin-bottom: 10px; }
+  .timeline :global(dl) { margin: 0; }
+  .timeline :global(dt) { padding-top: 9px; color: var(--muted); font: 0.74rem var(--mono); }
+  .timeline :global(dd) { margin: 2px 0 0; padding-bottom: 9px; border-bottom: 1px solid var(--rule); font-size: 0.95rem; }
+  .signals { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .signals figure { margin: 0; }
+  .signals canvas { width: 100%; height: 140px; }
+  [data-spec] { cursor: crosshair; }
+  @media (max-width: 960px) {
+    .controls { grid-template-columns: 1fr; }
+    .iot-lower, .signals { grid-template-columns: 1fr; }
+    .timeline { border-left: 0; padding-left: 0; }
+  }
+</style>

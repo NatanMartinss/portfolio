@@ -1,0 +1,88 @@
+---
+import '../styles/global.css';
+import { SITE } from '../config';
+import { t, homeHref, type Lang } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+  title?: string;
+  description?: string;
+  altHref: string; // mesma página no outro idioma
+}
+const { lang, title, description, altHref } = Astro.props;
+const s = t(lang);
+const fullTitle = title ? `${title} — ${SITE.name}` : `${SITE.name} — ${s.role}`;
+const altLang: Lang = lang === 'en' ? 'pt' : 'en';
+---
+<html lang={lang === 'pt' ? 'pt-BR' : 'en'}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description ?? s.lede} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <link rel="alternate" hreflang={altLang === 'pt' ? 'pt-BR' : 'en'} href={altHref} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description ?? s.lede} />
+  </head>
+  <body>
+    <header class="masthead wrap">
+      <a class="brand" href={homeHref(lang)}>
+        <span class="brand-mark" aria-hidden="true">{SITE.initials}</span>
+        <span class="brand-name">{SITE.name}</span>
+      </a>
+      <nav class="mono caps" aria-label="Main">
+        <a href={`${homeHref(lang)}#work`}>{s.index}</a>
+        <a href={`${homeHref(lang)}#about`}>{s.about}</a>
+        <a href={altHref} hreflang={altLang} lang={altLang}>{s.langSwitch}</a>
+      </nav>
+    </header>
+    <hr class="rule wrap-rule" />
+    <main>
+      <slot />
+    </main>
+    <footer class="wrap colophon">
+      <hr class="rule" />
+      <div class="colophon-row mono">
+        <span>© {new Date().getFullYear()} {SITE.name}</span>
+        <span>
+          {SITE.email && <><a href={`mailto:${SITE.email}`}>{SITE.email}</a> · </>}
+          <a href={SITE.github} rel="me">GitHub</a> ·
+          <a href={SITE.linkedin} rel="me">LinkedIn</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  .masthead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-block: 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+  .brand-mark {
+    display: grid; place-items: center;
+    width: 34px; height: 34px;
+    background: var(--ink); color: var(--paper);
+    font: 500 0.8rem/1 var(--mono);
+    letter-spacing: 0.04em;
+  }
+  .brand:hover .brand-mark { background: var(--red); }
+  .brand-name { font-family: var(--serif); font-size: 1.15rem; }
+  nav { display: flex; gap: 20px; flex-wrap: wrap; }
+  nav a { text-decoration: none; color: var(--ink-2); }
+  nav a:hover { color: var(--red-ink); }
+  .wrap-rule { max-width: calc(var(--max) - 2 * var(--gutter)); margin-inline: auto; }
+  @media (max-width: 1180px) { .wrap-rule { margin-inline: var(--gutter); } }
+  .colophon { margin-top: 96px; padding-bottom: 32px; }
+  .colophon-row {
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding-top: 14px;
+  }
+</style>

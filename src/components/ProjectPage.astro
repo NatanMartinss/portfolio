@@ -1,0 +1,134 @@
+---
+import Base from '../layouts/Base.astro';
+import ArchDiagram from './ArchDiagram.astro';
+import FraudDemo from './FraudDemo.astro';
+import IotDemo from './IotDemo.astro';
+import RagDemo from './RagDemo.astro';
+import FeatureStoreDemo from './FeatureStoreDemo.astro';
+import { projects, type Project } from '../data/projects';
+import { t, projectHref, homeHref, type Lang } from '../i18n/ui';
+
+interface Props { lang: Lang; project: Project }
+const { lang, project: p } = Astro.props;
+const s = t(lang);
+const altLang: Lang = lang === 'en' ? 'pt' : 'en';
+const i = projects.findIndex((x) => x.slug === p.slug);
+const next = projects[(i + 1) % projects.length];
+const r = p.reality[lang];
+const demos = { 'fraud-stream': FraudDemo, 'rag-guard': RagDemo, 'iot-maintenance': IotDemo, 'feature-store': FeatureStoreDemo } as const;
+const Demo = p.hasDemo ? demos[p.slug as keyof typeof demos] : null;
+const cols = [
+  { title: s.realCol, items: r.real, cls: 'real' },
+  { title: s.simCol, items: r.sim, cls: 'sim' },
+  { title: s.todoCol, items: r.todo, cls: 'todo' },
+].filter((c) => c.items.length);
+---
+<Base lang={lang} title={p.title[lang]} description={p.tagline[lang]} altHref={projectHref(altLang, p.slug)}>
+  <article>
+    <header class="wrap head">
+      <a class="mono back" href={`${homeHref(lang)}#work`}>{s.back}</a>
+      <div class="head-meta mono caps">
+        <span>{p.num}</span>
+        <span>{p.kicker[lang]}</span>
+        <span class:list={['tag', p.status === 'building' && 'tag--red']}>{s.status[p.status]}</span>
+      </div>
+      <h1>{p.title[lang]}</h1>
+      <p class="tagline">{p.tagline[lang]}</p>
+      <ul class="stack mono" aria-label={s.stack}>
+        {p.stack.map((x) => <li>{x}</li>)}
+      </ul>
+      {p.repo && <p class="repo mono"><a href={p.repo}>{s.code}</a></p>}
+    </header>
+
+    <section class="wrap block">
+      <h2 class="mono caps h-label">{s.demo}</h2>
+      {Demo ? (
+        <Demo lang={lang} />
+      ) : (
+        <div class="soon">
+          <p>{s.demoSoon}</p>
+        </div>
+      )}
+    </section>
+
+    <section class="wrap block two">
+      <div>
+        <h2 class="mono caps h-label">{s.problem}</h2>
+        <p class="problem">{p.problem[lang]}</p>
+      </div>
+      <div>
+        <h2 class="mono caps h-label">{s.howItWorks}</h2>
+        <ol class="how">{p.how[lang].map((x) => <li>{x}</li>)}</ol>
+      </div>
+    </section>
+
+    <section class="wrap block">
+      <figure class="fig">
+        <ArchDiagram nodes={p.nodes} edges={p.edges} lang={lang} title={p.title[lang]} />
+        <figcaption class="fig-caption">Fig. {p.num} — {s.howItWorks}</figcaption>
+      </figure>
+    </section>
+
+    <section class="wrap block">
+      <h2 class="mono caps h-label">{s.reality}</h2>
+      <div class="reality">
+        {cols.map((c) => (
+          <div class:list={['rcol', c.cls]}>
+            <h3>{c.title}</h3>
+            <ul>{c.items.map((x) => <li>{x}</li>)}</ul>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <nav class="wrap block next">
+      <hr class="rule" />
+      <a href={projectHref(lang, next.slug)}>
+        <span class="mono">{next.num} →</span>
+        <span class="next-title">{next.title[lang]}</span>
+      </a>
+    </nav>
+  </article>
+</Base>
+
+<style>
+  .head { padding-block: 28px 8px; }
+  .back { text-decoration: none; display: inline-block; margin-bottom: 36px; }
+  .head-meta { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .head h1 { max-width: 16ch; }
+  .tagline { font-family: var(--serif); font-size: clamp(1.2rem, 2.2vw, 1.55rem); line-height: 1.4; margin-top: 22px; color: var(--ink-2); }
+  .stack { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  .stack li::before { content: '▪ '; color: var(--red); }
+  .repo { margin-top: 18px; }
+
+  .block { margin-top: clamp(48px, 7vw, 88px); }
+  .h-label { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); margin-bottom: 18px; }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 5vw, 72px); }
+  .problem { font-family: var(--serif); font-size: 1.3rem; line-height: 1.45; }
+  .how { padding-left: 1.3em; margin: 0; display: grid; gap: 12px; }
+  .how li::marker { font-family: var(--mono); color: var(--red-ink); }
+  .fig { margin: 0; }
+  .fig .fig-caption { margin-top: 14px; }
+
+  .soon { border: 1px dashed var(--ink-2); padding: 40px 28px; background: var(--paper-2); }
+  .soon p { margin: 0; font-family: var(--serif); font-size: 1.2rem; }
+
+  .reality { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0; border-top: 1px solid var(--ink); }
+  .rcol { padding: 18px 22px 18px 0; }
+  .rcol + .rcol { border-left: 1px solid var(--rule); padding-left: 22px; }
+  .rcol h3 { font-size: 1.15rem; margin-bottom: 10px; }
+  .rcol h3::before { font-family: var(--mono); margin-right: 8px; }
+  .real h3::before { content: '●'; }
+  .sim h3::before { content: '◐'; }
+  .todo h3::before { content: '○'; color: var(--red); }
+  .rcol ul { padding-left: 1.1em; margin: 0; display: grid; gap: 8px; color: var(--ink-2); font-size: 0.95rem; }
+
+  .next a { display: flex; flex-direction: column; gap: 6px; padding-top: 24px; text-decoration: none; }
+  .next-title { font-family: var(--serif); font-size: clamp(1.6rem, 3vw, 2.4rem); }
+  .next a:hover .next-title { color: var(--red-ink); }
+
+  @media (max-width: 820px) {
+    .two { grid-template-columns: 1fr; }
+    .rcol + .rcol { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); }
+  }
+</style>
