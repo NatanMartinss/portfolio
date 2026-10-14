@@ -202,8 +202,9 @@ export const projects: Project[] = [
         sim: [
           'The vibration signal is synthetic: shaft harmonics, noise, and bearing impacts at the outer-race defect frequency ringing a structural resonance.',
           'Degradation follows a fixed 21-day exponential curve; time is compressed.',
+          'Known limitation: overheating moves a single sensor, and the Isolation Forest score saturates above its training range, so for that fault the model is usually not earlier than the classic temperature alarm.',
         ],
-        todo: ['MQTT broker, InfluxDB and Airflow running live on this server', 'Validation on a public bearing dataset (e.g. NASA IMS / CWRU)', 'Grafana dashboard'],
+        todo: ['Hybrid detector: per-sensor physical limits alongside the model', 'MQTT broker, InfluxDB and Airflow running live on this server', 'Validation on a public bearing dataset (e.g. NASA IMS / CWRU)', 'Grafana dashboard'],
       },
       pt: {
         real: [
@@ -214,8 +215,9 @@ export const projects: Project[] = [
         sim: [
           'O sinal de vibração é sintético: harmônicos do eixo, ruído e impactos do rolamento na frequência de defeito da pista externa, excitando uma ressonância estrutural.',
           'A degradação segue uma curva exponencial fixa de 21 dias; o tempo é comprimido.',
+          'Limitação conhecida: o superaquecimento mexe num único sensor, e o score do Isolation Forest satura acima da faixa de treino; nesse defeito o modelo geralmente não avisa antes do alarme clássico de temperatura.',
         ],
-        todo: ['Broker MQTT, InfluxDB e Airflow rodando ao vivo neste servidor', 'Validação num dataset público de rolamentos (ex.: NASA IMS / CWRU)', 'Dashboard no Grafana'],
+        todo: ['Detector híbrido: limites físicos por sensor ao lado do modelo', 'Broker MQTT, InfluxDB e Airflow rodando ao vivo neste servidor', 'Validação num dataset público de rolamentos (ex.: NASA IMS / CWRU)', 'Dashboard no Grafana'],
       },
     },
   },
