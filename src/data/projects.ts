@@ -58,7 +58,7 @@ export const projects: Project[] = [
         'Um modelo de gradient boosting, compilado para código nativo, transforma as features numa probabilidade de fraude. Um limiar, ajustado pelo custo de bloquear à toa versus deixar passar fraude, toma a decisão.',
       ],
     },
-    stack: ['Redpanda', 'Apache Flink', 'Redis', 'XGBoost → Treelite', 'Prometheus'],
+    stack: ['Redpanda', 'Apache Flink', 'Redis', 'XGBoost → TL2cgen', 'Prometheus'],
     nodes: [
       { id: 'pos', label: 'POS / API', sub: { en: 'card swipes', pt: 'passagens de cartão' }, col: 0, row: 1 },
       { id: 'rp', label: 'Redpanda', sub: { en: 'partitioned log', pt: 'log particionado' }, col: 1, row: 1 },
