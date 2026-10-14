@@ -37,8 +37,8 @@ export const projects: Project[] = [
     kicker: { en: 'Finance · low latency', pt: 'Finanças · baixa latência' },
     title: { en: 'Real-time fraud detection', pt: 'Detecção de fraude em tempo real' },
     tagline: {
-      en: 'Thousands of card transactions per second, each scored and blocked or approved in under 20 ms.',
-      pt: 'Milhares de transações de cartão por segundo, cada uma pontuada e bloqueada ou aprovada em menos de 20 ms.',
+      en: 'Thousands of card transactions per second, each scored and blocked or approved within a 20 ms latency budget.',
+      pt: 'Milhares de transações de cartão por segundo, cada uma pontuada e bloqueada ou aprovada dentro de uma meta de 20 ms.',
     },
     problem: {
       en: 'A fraud decision is only useful before the payment clears. That turns a modelling problem into a latency budget: features must be computed over sliding windows, user profiles fetched from memory, and the model evaluated, all inside a single authorization round-trip.',
